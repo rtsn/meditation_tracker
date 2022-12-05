@@ -123,7 +123,6 @@ def main():
 
     if args["add"]:
         minutes_to_add = int(args["add"])
-        print(minutes_to_add)
         write_file(file_name,minutes_to_add,total_minutes)
     elif args["set"]:
         minutes_to_add = int(args["set"])
