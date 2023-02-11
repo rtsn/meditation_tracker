@@ -3,32 +3,87 @@
 A simple meditation time tracker
 """
 # make -a and -s mutually exlusive
+# add db support
+# assume date is today else check if -date is present
+# file = db_file
+# requirements
 
 import os.path
 import argparse
+import datetime
+import sqlite3
+from sqlite3 import Error
 
-def create_file(file_name):
-    """Creates file if it doesn't exist."""
-    if not os.path.isfile(file_name):
-        with open(file_name, "w", encoding="utf8") as file_object:
-            file_object.write("0")
+def create_connection(db_file):
+    """ create a database connection to the SQLite database
+        specified by db_file
+    :param db_file: database file
+    :return: Connection object or None
+    """
+    try:
+        conn = sqlite3.connect(db_file)
+        return conn
+    except Error as sqlite_er:
+        print(sqlite_er)
+    return None
 
-def get_minutes(file_name):
-    """Returns number of minutes from file_name."""
-    with open(file_name, "r", encoding="utf8") as file_object:
-        minutes = int(file_object.read())
-        file_object.close()
-        return minutes
+def create_table(conn):
+    """ create a table from the createTable_sql statement
+    :param conn: Connection object
+    :return:
+    """
+    sql = '''CREATE TABLE IF NOT EXISTS meditation_sessions(
+            id integer PRIMARY KEY,
+            duration integer NOT NULL,
+            [date] timestamp NOT NULL
+            ); '''
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+    except Error as sqlite_er:
+        print(sqlite_er)
 
-def write_file(file_name,minutes_to_add,total_minutes):
-    """Either add (-a -add) MINUTES to total number of minutes in
-    file_name or set (-s, --set, total_minutes = -1)."""
-    if total_minutes == -1:
-        total_minutes = minutes_to_add
-    else:
-        total_minutes += minutes_to_add
-    with open(file_name, "w", encoding="utf8") as file_object:
-        file_object.write(str(total_minutes))
+def add_session_to_db(conn, session):
+    """ add meditation session to s
+    :param conn:
+    :param duration in minutes >= 1
+    :param date:
+    :return: ???
+    """
+
+    sql = '''INSERT INTO meditation_sessions(duration, date)
+              VALUES(?,?)'''
+
+    try:
+        cur = conn.cursor()
+        cur.execute(sql,session)
+        return cur.lastrowid
+    except Error as sqlite_er:
+        print(sqlite_er)
+        return None
+
+def get_sum_of_durations(conn):
+    """Get a sum total of duration entries in db"""
+    sql = 'SELECT SUM(duration) FROM meditation_sessions;'
+    try:
+        cur = conn.cursor()
+        cur.execute(sql)
+        return cur.fetchone()[0]
+    except Error as sqlite_er:
+        print(sqlite_er)
+        return None
+
+def get_number_of_sessions():
+    pass
+
+def get_average():
+    pass
+
+def longest_gap():
+    pass
+
+def longest_streak():
+    pass
 
 def get_output(minutes):
     """ Get a user friendly output of time in the format days, hours and
@@ -84,8 +139,6 @@ def get_compact_output(minutes):
     return output
 
 def main():
-    """Where everything is sewn together."""
-
     # Construct the argument parser and parse the arguments
     arg_desc = '''\
             A very simple meditation time tracker!
@@ -98,10 +151,13 @@ def main():
 
     parser.add_argument("-f", "--file",
             metavar="FILE",
-            help = "Path to tracker file.")
+            help = "Path to database file.")
     parser.add_argument("-a", "--add",
             metavar="ADD",
             help = "Add an interger number of minutes to the total")
+    parser.add_argument("-d", "--date",
+            metavar="DATE",
+            help = "Specify date of session (YYYY-MM-DD)")
     parser.add_argument("-s", "--set",
             metavar="SET",
             help = "Set total to n number of minutes")
@@ -112,30 +168,36 @@ def main():
     args = vars(parser.parse_args())
 
     if args["file"]:
-        file_name = args["file"]
+        database = args["file"]
     else:
-        file_name = "~/.med"
+        database = "meditation_tracker.db"
 
-    file_name = os.path.expanduser(file_name)
+    database = os.path.expanduser(database)
+    conn = create_connection(database)
 
-    create_file(file_name)
-    total_minutes = get_minutes(file_name)
-
-    if args["add"]:
-        minutes_to_add = int(args["add"])
-        write_file(file_name,minutes_to_add,total_minutes)
-    elif args["set"]:
-        minutes_to_add = int(args["set"])
-        write_file(file_name,minutes_to_add,-1)
-
-    total_minutes = get_minutes(file_name)
-
-    if args["compact"]:
-        output = get_compact_output(total_minutes)
-    else:
-        output = get_output(total_minutes)
-
-    print(output)
+    with conn:
+        create_table(conn)
+        if args["add"]:
+            duration = int(args["add"])
+            #check that this is an int
+            if args["date"]:
+                # set datetime objekt thingy
+                # check correctly formated
+                date = datetime.datetime.today()
+            else:
+                date = datetime.datetime.today().strftime('%Y-%m-%d')
+            session = [duration,date]
+            add_session_to_db(conn, session)
+            total_duration = get_sum_of_durations(conn)
+            if args["compact"]:
+                output = get_compact_output(total_duration)
+            else:
+                output = get_output(total_duration)
+            print(output)
+        if args["compact"] and not args["add"]:
+            total_duration = get_sum_of_durations(conn)
+            output = get_compact_output(total_duration)
+            print(output)
 
 if __name__ == "__main__":
     main()
